@@ -3,47 +3,50 @@
 import boto3
 import json
 import os,sys
+from texttable import Texttable
 
 client = boto3.client('s3')
 bucket_list = client.list_buckets()
 
 def check_bucket(bucket):
-    bucket_location = client.get_bucket_location(Bucket=bucket)['LocationConstraint']
+    try:
+        bucket_location = client.get_bucket_location(Bucket=bucket)['LocationConstraint']
+    except:
+        return(bucket, "FAIL", "FAIL")
     new_client = boto3.client('s3', region_name=bucket_location)
     bucket_acl = new_client.get_bucket_acl(Bucket=bucket)
     permission = []
+    auth_permission = []
+        
+    AllUsers = []
+    AuthUsers = []
 
     for grants in bucket_acl['Grants']:
+        #print(bucket)
+        #print(grants)
         if ('URI' in grants['Grantee']) and ('AllUser' in grants['Grantee']['URI']):
             permission.append(grants['Permission'])
+        if ('URI' in grants['Grantee']) and ('AuthenticatedUsers' in grants['Grantee']['URI']):
+            auth_permission.append(grants['Permission'])
 
-        globalListAccess = 'no'
-        globalWriteAccess = 'no'
 
-        if len(permission) == 1:
-            if permission[0] == 'READ':
-                globalListAccess = 'YES'
-                globalWriteAccess = 'no'
-               
-        elif len(permission) > 1:
-       	    if permission[0] == 'READ':
-            	globalListAccess = 'YES'
-            if permission[1] == 'WRITE':
-                globalWriteAccess = 'YES'
-            else:
-                globalWriteAccess = 'no'
+    for perm in permission:
+        AllUsers.append(perm)
+
+    for auth_perm in auth_permission:
+        AuthUsers.append(auth_perm)
     
-    return(bucket, bucket_location, globalListAccess, globalWriteAccess)
+    return(bucket, bucket_location, AllUsers, AuthUsers)
 
 def display_data(data):
     table = Texttable()
     table.set_cols_align(["l", "l", "c", "c"])
     table.set_cols_dtype(['t', 't', 't', 't'])
-    table.set_cols_width(['60', '15', '12', '12'])
-    table.add_rows([['Bucket', 'Region', 'Read Access', 'Write Access']])
+    table.set_cols_width(['60', '15', '30', '30'])
+    table.add_rows([['Bucket', 'Region', 'All Users Access', 'Auth\'d Users']])
 
     for s3 in data:
-        table.add_row([s3['bucket'], s3['bucket_location'], s3['read'], s3['write']])
+        table.add_row([s3['bucket'], s3['bucket_location'], s3['allusers'], s3['authusers']])
 
     print(table.draw())
 
@@ -52,25 +55,12 @@ def connect_s3():
     data = []
 
     for bucket in client.buckets.all():
-        bucket, bucket_location, globalListAccess, globalWriteAccess =  check_bucket(bucket.name)
-        data.append({'bucket':bucket, 'bucket_location':bucket_location, 'read':globalListAccess, 'write':globalWriteAccess})
+        bucket, bucket_location, AllUsers, AuthUsers =  check_bucket(bucket.name)
+        data.append({'bucket':bucket, 'bucket_location':bucket_location, 'allusers':AllUsers, 'authusers':AuthUsers})
 
     display_data(data)
 
-def lambda_handler(event, context):
-    libdir = os.path.dirname(os.path.realpath(__file__))
-    # Import installed packages (in site-packages)
-    site_pkgs = os.path.join(libdir, "libs")
-    sys.path.append(site_pkgs)
-    from texttable import Texttable
-    try:
-        print()
-        connect_s3()
-    except Exception as err:
-        print(err)
-
 if __name__ == "__main__":
-    from texttable import Texttable
     try:
         print()
         connect_s3()
