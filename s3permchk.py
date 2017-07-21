@@ -12,9 +12,13 @@ def check_bucket(bucket):
     try:
         bucket_location = client.get_bucket_location(Bucket=bucket)['LocationConstraint']
     except:
-        return(bucket, "FAIL", "FAIL")
+        return(bucket, "FAIL", "FAIL", "FAIL")
     new_client = boto3.client('s3', region_name=bucket_location)
-    bucket_acl = new_client.get_bucket_acl(Bucket=bucket)
+    try:
+        bucket_acl = new_client.get_bucket_acl(Bucket=bucket)
+    except:
+        return(bucket, "FAIL", "FAIL", "FAIL")
+        
     permission = []
     auth_permission = []
         
