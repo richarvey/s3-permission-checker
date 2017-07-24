@@ -3,21 +3,25 @@
 import boto3
 import json
 import os,sys
+import argparse
 from texttable import Texttable
 
-client = boto3.client('s3')
-bucket_list = client.list_buckets()
+def get_options():
+  parser = argparse.ArgumentParser(description='TAD_builder tool')
+  parser.add_argument('-p','--profile', metavar='profile', help='profile in .aws/config', required=False)
+  args = vars(parser.parse_args())
+  profile = args['profile']
+  return(profile)
 
-def check_bucket(bucket):
+def check_bucket(bucket, client):
     try:
         bucket_location = client.get_bucket_location(Bucket=bucket)['LocationConstraint']
     except:
-        return(bucket, "FAIL", "FAIL", "FAIL")
-    new_client = boto3.client('s3', region_name=bucket_location)
+        return(bucket, "FAIL_LOC", "FAIL", "FAIL")
     try:
-        bucket_acl = new_client.get_bucket_acl(Bucket=bucket)
+        bucket_acl = client.get_bucket_acl(Bucket=bucket)
     except:
-        return(bucket, "FAIL", "FAIL", "FAIL")
+        return(bucket, "FAIL", "FAIL_ACL", "FAIL_ACL")
         
     permission = []
     auth_permission = []
@@ -26,8 +30,6 @@ def check_bucket(bucket):
     AuthUsers = []
 
     for grants in bucket_acl['Grants']:
-        #print(bucket)
-        #print(grants)
         if ('URI' in grants['Grantee']) and ('AllUser' in grants['Grantee']['URI']):
             permission.append(grants['Permission'])
         if ('URI' in grants['Grantee']) and ('AuthenticatedUsers' in grants['Grantee']['URI']):
@@ -54,19 +56,26 @@ def display_data(data):
 
     print(table.draw())
 
-def connect_s3():
-    client = boto3.resource('s3')
-    data = []
+def connect_s3(profile):
+    if(profile != None):
+        boto3.setup_default_session(profile_name=profile)
+    resource = boto3.resource('s3')
+    client = boto3.client('s3')
+    return(resource, client)
 
-    for bucket in client.buckets.all():
-        bucket, bucket_location, AllUsers, AuthUsers =  check_bucket(bucket.name)
+
+def s3_perm_chk(profile):
+    resource, client = connect_s3(profile)
+    data = []
+    for bucket in resource.buckets.all():
+        bucket, bucket_location, AllUsers, AuthUsers =  check_bucket(bucket.name, client)
         data.append({'bucket':bucket, 'bucket_location':bucket_location, 'allusers':AllUsers, 'authusers':AuthUsers})
 
     display_data(data)
 
 if __name__ == "__main__":
     try:
-        print()
-        connect_s3()
+        profile = get_options()
+        s3_perm_chk(profile)
     except Exception as err:
         print(err)
