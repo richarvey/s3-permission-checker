@@ -6,6 +6,7 @@ Produces a report of all S3 buckets in your account and prints out a table to ea
 
  - Python 3
  - boto3
+ - argparse
  - texttable
  - awscli installed and configure for credentials
 
