@@ -16,6 +16,8 @@ def get_options():
 def check_bucket(bucket, client):
     try:
         bucket_location = client.get_bucket_location(Bucket=bucket)['LocationConstraint']
+        if (bucket_location == None):
+            bucket_location = 'us-east-1'
     except:
         return(bucket, "FAIL_LOC", "FAIL", "FAIL")
     try:
